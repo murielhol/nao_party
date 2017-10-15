@@ -19,6 +19,8 @@ import cv2
 import random
 import datetime
 
+import threading
+
 # import pynaoqi.qi as qi
 
 __author__ = "Michiel van der Meer, Caitlin Lagrand"
@@ -30,9 +32,73 @@ __version__ = "0.1.7"
 getch = getch._Getch()
 
 
-# Main program to perform the measurements
-def main(args):
+def initialize_camera(videoDevice):
+    AL_kTopCamera = 0
+    AL_kVGA = 2            # 320x240
+    AL_kBGRColorSpace = 13
+    AL_kCameraExposureID = 20
+    captureDevice = videoDevice.subscribeCamera("test", AL_kTopCamera, AL_kVGA, AL_kBGRColorSpace, 10) # create image
 
+    # turn off exposition(0-1)
+    expositionID = 11
+    videoDevice.setCameraParameter(captureDevice, expositionID, 0)
+    # set exposure time(0-255)
+    amountMS = 55
+    exposureID = 17
+    videoDevice.setCameraParameter(captureDevice, exposureID, amountMS)
+    # set gain(32-255)
+    amountGain = 255
+    gainID = 6
+    videoDevice.setCameraParameter(captureDevice, gainID, amountGain)
+
+    return videoDevice, captureDevice
+
+
+class CaptureImage:
+    def __init__(self):
+        self.is_running = True
+
+    def capture_image(self, start_time, videoDevice, captureDevice, motionProxy):
+
+        prev_time = start_time
+        data_counter = 0
+
+        while self.is_running:
+            curr_time = time.time()
+            time_elapsed = abs(curr_time - prev_time)
+            if time_elapsed > 3:
+
+                # take picture here
+                result = videoDevice.getImageRemote(captureDevice)
+
+                # get sensor data
+                jointvalues = motionProxy.getAngles("Body", True)
+                jointnames = motionProxy.getBodyNames("Body")
+
+                if result is None:
+                    print 'cannot capture.'
+                elif result[6] is None:
+                    print 'no image data string.'
+                else:  # translate value to mat
+                    values = map(ord, list(result[6]))
+                    image = np.reshape(values, (480, 640, 3)).astype('uint8')
+
+                    string2 = "./data/plaatje" + str(data_counter) + ".txt"
+                    file = open(string2, "w")
+
+                    for jointvalue, jointname in zip(jointvalues, jointnames):
+                        file.write(jointname + " " + str(jointvalue) + "\n")
+                    file.close()
+
+                    # save image
+                    string2 = "./images/plaatje" + str(data_counter) + ".jpg"
+                    cv2.imwrite(string2, image)
+                    data_counter += 1
+
+                prev_time = curr_time
+
+
+def main(args):
 
 # Create list of nao objects
     naos = NaoManager()
@@ -67,13 +133,7 @@ def main(args):
     # session = qi.Session()
     # videoDevice = session.service("ALVideoDevice")
     videoDevice = ALProxy('ALVideoDevice', ip_addr, port_num)# subscribe top camera
-
-
-    AL_kTopCamera = 0
-    AL_kVGA = 2            # 320x240
-    AL_kBGRColorSpace = 13
-    AL_kCameraExposureID = 20
-    captureDevice = videoDevice.subscribeCamera("test", AL_kTopCamera, AL_kVGA, AL_kBGRColorSpace, 10)# create image
+    videoDevice, captureDevice = initialize_camera(videoDevice)
 
     motionProxy = ALProxy("ALMotion", ip_addr, 9559)
 
@@ -82,74 +142,22 @@ def main(args):
     image = np.zeros((height, width, 3), np.uint8)
     num = 200
 
-    # turn off exposition(0-1)
-    expositionID = 11
-    videoDevice.setCameraParameter(captureDevice, expositionID, 0)
-    # set exposure time(0-255)
-    amountMS = 55
-    exposureID = 17
-    videoDevice.setCameraParameter(captureDevice, exposureID, amountMS)
-    # set gain(32-255)
-    amountGain = 255
-    gainID = 6
-    videoDevice.setCameraParameter(captureDevice, gainID, amountGain)
-    starttime = time.time()
-    ##############################################################################################
 
-    prev_time = time.time()
-    start_time = time.time()
+    ci = CaptureImage()
+    start = time.time()
+    t1 = threading.Thread(target=ci.capture_image, args=[start, videoDevice, captureDevice, motionProxy])
+    t1.start()
 
     while True:
-
-        curr_time = time.time()
-        time_elapsed = curr_time - prev_time
-
-        ####################################### datasetCreator ######################################
-        # get image and jointvalues
-        jointvalues = motionProxy.getAngles("Body", True)
-        jointnames = motionProxy.getBodyNames("Body")
-
-        # print(jointvalues)
-        # print jointnames
-
-        result = videoDevice.getImageRemote(captureDevice)
-
-        if result == None:
-          print 'cannot capture.'
-        elif result[6] == None:
-          print 'no image data string.'
-        else:        # translate value to mat
-          values = map(ord, list(result[6]))
-          image = np.reshape(values, (height, width, 3)).astype('uint8')
-
-          # if time_elapsed > 5:
-          #   cv2.imshow("pepper-top-camera-320x240", image)
-          #   cv2.waitKey(0)
-
-          print start_time
-          # if(d.second == 2 or d.second == 0): #  make a picture every 30 seconds
-          # if (cv2.waitKey(5) == 97):  # 97 = a. press a to make a picture.
-          if True:
-            print '-------------'
-            # # save joint values
-            # string2 = "./images/plaatje" + str(num) + ".txt"
-            # file = open(string2,"w")
-            #
-            # for jointvalue, jointname in zip(jointvalues, jointnames):
-            #   file.write(jointname + " " + str(jointvalue) + "\n")
-            # file.close()
-
-            # save image
-            string2 = "./images/plaatje" + str(num) + ".jpg"
-            cv2.imwrite(string2, image)
-            print 'Image saved'
-            num += 1
-            ##############################################################################################
 
         key_press = getch()
         key_press = key_press.decode('ascii')
         if (key_press == 'z'):
             print("Closing Connection")
+
+            ci.is_running = False
+            t1.join()  # stop the image capturing thread
+
             for nao in naos:
                 nao.motion.rest()
                 nao.motion.killAll()
@@ -308,6 +316,7 @@ def main(args):
             except BaseException, err:
                 print err
 
+        # kick
         elif (key_press == 'u'):
             # print("Caravan palace dance")
             # # Choregraphe bezier export in Python.
@@ -435,6 +444,7 @@ def main(args):
                                         [[0.25],      [0.25],        [0.25]], True)
             naos.posture.post.goToPosture("StandInit", 0.5)
 
+        # hello wave
         elif (key_press == 'h'):
             print("Hello wave")
             # Choregraphe bezier export in Python.
@@ -507,6 +517,7 @@ def main(args):
             except BaseException, err:
               print err
 
+        # macarena
         elif (key_press == 'j'):
             print("Macarena")
             # Choregraphe bezier export in Python.
@@ -633,6 +644,7 @@ def main(args):
                 theta = 0
                 nao.motion.setWalkTargetVelocity(x, y, theta, frequency)
             # time.sleep(CommandFreq)  # sleep after every command
+
 
 if __name__ == '__main__':
     # Parse arguments
