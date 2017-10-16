@@ -111,10 +111,10 @@ class HeadShake:
 
     def head_shake(self, naos):
 
-        t = np.linspace(1, 11, 10, endpoint=False).tolist()
+        t = np.linspace(1, 6, 5, endpoint=False).tolist()
         times = list([t])
 
-        x = np.linspace(-np.pi, np.pi, 10)
+        x = np.linspace(-np.pi, np.pi, 5)
         angle = 0.7 * np.sin(x)
         angle = angle.tolist()
         keys = list([angle])  # angle of head
@@ -124,6 +124,7 @@ class HeadShake:
 
         while self.is_shaking:
             naos.motion.post.angleInterpolationBezier(names, times, keys)
+            time.sleep(12)
 
 
 def main(args):
@@ -146,7 +147,7 @@ def main(args):
     y = 0.0
     theta = 0.0
     frequency = 1
-    CommandFreq = 0.5
+    CommandFreq = 0.2
     starttime = time.time()
     print("Ready for liftoff at: {}".format(starttime))
 
@@ -165,19 +166,17 @@ def main(args):
 
     motionProxy = ALProxy("ALMotion", ip_addr, 9559)
 
-    width = 640
-    height = 480
-    image = np.zeros((height, width, 3), np.uint8)
-    num = 200
-
     # start a new thread to capture images
     ci = CaptureImage()
     start = time.time()
     t1 = threading.Thread(target=ci.capture_image, args=[start, videoDevice, captureDevice, motionProxy])
     t1.start()
 
+    # initiate a thread for the head turning maneuver
     hs = HeadShake()
     t2 = threading.Thread(target=hs.head_shake, args=[naos])
+
+    t2_flag = False     # keep track if the thread is started
 
     _img_counter = 0
 
@@ -193,11 +192,13 @@ def main(args):
         elif key_press == 'o':
             print "Head turning"
             t2.start()
+            t2_flag = True
 
         elif key_press == 'p':
             print "Stop head turning"
             hs.is_shaking = False
             t2.join()
+            t2_flag = False
 
         elif key_press == 'i':
             print "Shaking head"
@@ -221,11 +222,13 @@ def main(args):
         elif key_press == 'z':
             print("Closing Connection")
 
+            # close the timing thread
             ci.is_running = False
             t1.join()  # stop the image capturing thread
 
-            hs.is_shaking = False
-            t2.join()
+            if t2_flag:     # close the head turning thread only if it is started
+                hs.is_shaking = False
+                t2.join()
 
             for nao in naos:
                 nao.motion.rest()
