@@ -54,6 +54,35 @@ def initialize_camera(videoDevice):
     return videoDevice, captureDevice
 
 
+# a function to save the image captured and the sensor reading
+def save_data(videoDevice, captureDevice, motionProxy, file_prefix, file_seq):
+    # take picture here
+    result = videoDevice.getImageRemote(captureDevice)
+
+    # get sensor data
+    jointvalues = motionProxy.getAngles("Body", True)
+    jointnames = motionProxy.getBodyNames("Body")
+
+    if result is None:
+        print 'cannot capture.'
+    elif result[6] is None:
+        print 'no image data string.'
+    else:  # translate value to mat
+        values = map(ord, list(result[6]))
+        image = np.reshape(values, (480, 640, 3)).astype('uint8')
+
+        string2 = "./data/" + str(file_prefix) + str(file_seq) + ".txt"
+        file = open(string2, "w")
+
+        for jointvalue, jointname in zip(jointvalues, jointnames):
+            file.write(jointname + " " + str(jointvalue) + "\n")
+        file.close()
+
+        # save image
+        string2 = "./images/" + str(file_prefix) + str(file_seq) + ".jpg"
+        cv2.imwrite(string2, image)
+
+
 class CaptureImage:
     def __init__(self):
         self.is_running = True
@@ -62,40 +91,39 @@ class CaptureImage:
 
         prev_time = start_time
         data_counter = 0
+        image_frequency = 2
 
         while self.is_running:
             curr_time = time.time()
             time_elapsed = abs(curr_time - prev_time)
-            if time_elapsed > 3:
+            if time_elapsed > image_frequency:
 
-                # take picture here
-                result = videoDevice.getImageRemote(captureDevice)
+                save_data(videoDevice, captureDevice, motionProxy,
+                          "recording", data_counter)
 
-                # get sensor data
-                jointvalues = motionProxy.getAngles("Body", True)
-                jointnames = motionProxy.getBodyNames("Body")
-
-                if result is None:
-                    print 'cannot capture.'
-                elif result[6] is None:
-                    print 'no image data string.'
-                else:  # translate value to mat
-                    values = map(ord, list(result[6]))
-                    image = np.reshape(values, (480, 640, 3)).astype('uint8')
-
-                    string2 = "./data/plaatje" + str(data_counter) + ".txt"
-                    file = open(string2, "w")
-
-                    for jointvalue, jointname in zip(jointvalues, jointnames):
-                        file.write(jointname + " " + str(jointvalue) + "\n")
-                    file.close()
-
-                    # save image
-                    string2 = "./images/plaatje" + str(data_counter) + ".jpg"
-                    cv2.imwrite(string2, image)
-                    data_counter += 1
-
+                data_counter += 1
                 prev_time = curr_time
+
+
+class HeadShake:
+    def __init__(self):
+        self.is_shaking = True
+
+    def head_shake(self, naos):
+
+        t = np.linspace(1, 11, 10, endpoint=False).tolist()
+        times = list([t])
+
+        x = np.linspace(-np.pi, np.pi, 10)
+        angle = 0.7 * np.sin(x)
+        angle = angle.tolist()
+        keys = list([angle])  # angle of head
+
+        names = list()
+        names.append("HeadYaw")
+
+        while self.is_shaking:
+            naos.motion.post.angleInterpolationBezier(names, times, keys)
 
 
 def main(args):
@@ -117,7 +145,7 @@ def main(args):
     x = 0.0
     y = 0.0
     theta = 0.0
-    frequency = 0.3
+    frequency = 1
     CommandFreq = 0.5
     starttime = time.time()
     print("Ready for liftoff at: {}".format(starttime))
@@ -142,65 +170,106 @@ def main(args):
     image = np.zeros((height, width, 3), np.uint8)
     num = 200
 
-
+    # start a new thread to capture images
     ci = CaptureImage()
     start = time.time()
     t1 = threading.Thread(target=ci.capture_image, args=[start, videoDevice, captureDevice, motionProxy])
     t1.start()
 
+    hs = HeadShake()
+    t2 = threading.Thread(target=hs.head_shake, args=[naos])
+
+    _img_counter = 0
+
     while True:
 
         key_press = getch()
         key_press = key_press.decode('ascii')
-        if (key_press == 'z'):
+        if key_press == 'c':
+
+            save_data(videoDevice, captureDevice, motionProxy, "calibration", _img_counter)
+            _img_counter += 1
+
+        elif key_press == 'o':
+            print "Head turning"
+            t2.start()
+
+        elif key_press == 'p':
+            print "Stop head turning"
+            hs.is_shaking = False
+            t2.join()
+
+        elif key_press == 'i':
+            print "Shaking head"
+
+            t = np.linspace(1, 11, 10, endpoint=False).tolist()
+            times = list([t])
+
+            x = np.linspace(-np.pi, np.pi, 10)
+            angle = 0.7 * np.sin(x)
+            angle = angle.tolist()
+            keys = list([angle])  # angle of head
+
+            names = list()
+            names.append("HeadYaw")
+
+            try:
+                naos.motion.post.angleInterpolationBezier(names, times, keys)
+            except BaseException, err:
+                print err
+
+        elif key_press == 'z':
             print("Closing Connection")
 
             ci.is_running = False
             t1.join()  # stop the image capturing thread
+
+            hs.is_shaking = False
+            t2.join()
 
             for nao in naos:
                 nao.motion.rest()
                 nao.motion.killAll()
                 nao.stop()
                 exit()
-        elif (key_press == 'w'):
+        elif key_press == 'w':
             print("Moving forward")
             for nao in naos:
                 x = 0.5
                 nao.motion.setWalkTargetVelocity(x, 0, 0, frequency)
                 time.sleep(CommandFreq)
-        elif (key_press == 's'):
+        elif key_press == 's':
             print("Moving backward")
             for nao in naos:
                 x = -0.5
                 nao.motion.setWalkTargetVelocity(x, 0, 0, frequency)
                 time.sleep(CommandFreq)
-        elif (key_press == 'x'):
+        elif key_press == 'x':
             print("Stopping")
             for nao in naos:
                 nao.motion.setWalkTargetVelocity(0, 0, 0, frequency)
                 time.sleep(CommandFreq)
-        elif (key_press == 'a'):
+        elif key_press == 'a':
             print("Turning left")
             for nao in naos:
                 theta = 0.5
                 nao.motion.setWalkTargetVelocity(x, y, theta, frequency)
                 time.sleep(CommandFreq)
-        elif (key_press == 'd'):
+        elif key_press == 'd':
             print("Turning right")
             for nao in naos:
                 theta = -0.5
                 nao.motion.setWalkTargetVelocity(x, y, theta, frequency)
                 time.sleep(CommandFreq)
-        elif (key_press == 'q'):
+        elif key_press == 'q':
             print("Going to rest")
             naos.motion.post.rest()
             print("Resting (zzz)")
-        elif (key_press == 'e'):
+        elif key_press == 'e':
             print("Standup")
             naos.posture.post.goToPosture("StandInit", 0.5)
             print("Done standing up")
-        elif (key_press == 'y'):
+        elif key_press == 'y':
             print("Robot")
             # Choregraphe bezier export in Python.
             names = list()
@@ -317,7 +386,7 @@ def main(args):
                 print err
 
         # kick
-        elif (key_press == 'u'):
+        elif key_press == 'u':
             # print("Caravan palace dance")
             # # Choregraphe bezier export in Python.
             # names = list()
@@ -445,7 +514,7 @@ def main(args):
             naos.posture.post.goToPosture("StandInit", 0.5)
 
         # hello wave
-        elif (key_press == 'h'):
+        elif key_press == 'h':
             print("Hello wave")
             # Choregraphe bezier export in Python.
             names = list()
@@ -518,7 +587,7 @@ def main(args):
               print err
 
         # macarena
-        elif (key_press == 'j'):
+        elif key_press == 'j':
             print("Macarena")
             # Choregraphe bezier export in Python.
             names = list()
