@@ -1,8 +1,17 @@
 import cv2
-print cv2.__version__
 import numpy as np
-image = cv2.imread('images/top-yellow.jpg')
+
+
+
+
 def landmark_detection(image):
+
+    '''
+    returns signature, ID, size and location
+
+
+
+    '''
     normalizedImg = np.zeros(np.shape(image))
     image = cv2.normalize(image,  normalizedImg, 0, 255, cv2.NORM_MINMAX)
     hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
@@ -77,7 +86,7 @@ def landmark_detection(image):
     # print(yellow)
     # print(green)
     # print(blue)
-    IDs = []
+
     signatures = []
     for p in pink:
         size = p.size
@@ -87,34 +96,40 @@ def landmark_detection(image):
                 if p.pt[1] > y.pt[1]:
                     # pink top, yellow bottom
                     signatures.append([1,2])
-                    IDs.append(6)
+                    signatures.append([6])
                 else:
                     # pink bottom, yellow top
                     signatures.append([2,1])
-                    IDs.append(5)
+                    signatures.append([5])
+                signatures.append(size)
+                signatures.append(p.pt)
         for b in blue:
             # check if the keypoint is around the same size and if around the same x location
             if abs(p.pt[0]-b.pt[0]) < size/2 and b.size < size+(size/4) and b.size > size-(size/4):
                 if p.pt[1] > b.pt[1]:
                     # pink top, blue bottom
                     signatures.append([1,3])
-                    IDs.append(2)
+                    signatures.append([2])
                 else:
                     # pink bottom, blue top
                     signatures.append([3,1])
-                    IDs.append(1)
+                    signatures.append([1])
+                signatures.append(size)
+                signatures.append(p.pt)
         for g in green:
             # check if the keypoint is around the same size and if around the same x location
             if abs(p.pt[0]-g.pt[0]) < size/2 and g.size < size+(size/4) and g.size > size-(size/4):
                 if p.pt[1] > g.pt[1]:
                     # pink top, green bottom
                     signatures.append([1,0])
-                    IDs.append(3)
+                    signatures.append([3])
                 else:
                     # pink bottom, green top
                     signatures.append([0,1])
-                    IDs.append(4)
-    return(signatures, IDs)
+                    signatures.append([4])
+                signatures.append([size])
+                signatures.append(p.pt)
+    return(signatures)
 
 
 
