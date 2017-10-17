@@ -16,10 +16,13 @@ class LandmarkData:
 
         self._calibrate()
 
-        file_seq = [i for i in range(130)]
-        self.sensor_data = self._read_sensor_data(file_seq=file_seq,
+        self.file_seq = [i for i in range(130)]
+        self.sensor_data = self._read_sensor_data(file_seq=self.file_seq,
                                                   data_dir="./final_run_data/complete_0_130",
                                                   prefix="recording")
+
+    def __call__(self):
+        self._get_landmark_dataset(self.file_seq)
 
     # find the distance of a landmark given the width (pixels)
     def _find_distance(self, pixel_width):
@@ -40,6 +43,8 @@ class LandmarkData:
     def _calibrate(self):
         ''' use the calibration image to find the focal length '''
 
+        print 'calibrating...'
+
         focal_length = list()
         landmark_width_pix = list()
         detected_ind = list()
@@ -54,7 +59,7 @@ class LandmarkData:
             if len(landmark_info) > 0:
                 print landmark_info
                 # focal length for every img
-                focal_length.append(self._find_focal_length(landmark_info[2], actual_dist[i], self.landmark_width))
+                focal_length.append(self._find_focal_length(landmark_info[2][0], actual_dist[i], self.landmark_width))
 
                 # record the width of landmark in terms of pixels
                 landmark_width_pix.append(landmark_info[2])
@@ -108,7 +113,7 @@ class LandmarkData:
          dict: {signature: ID, range: R, bearing: radians}
          return: [ [ {ID:1, Range:2, Bearing:0.5}, {ID:3, Range:1.5, Bearing:0.2} ], [{ ... }] ]
         """
-
+        print 'getting landmark dataset...'
         detected_ind = list()
         data = list()
 

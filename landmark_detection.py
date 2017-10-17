@@ -25,11 +25,11 @@ def landmark_detection(image):
         # pink
         ([145, 0, 0], [175, 255, 255]),
         # yellow
-        ([20, 0, 0],[40, 255, 255]),
+        ([20, 0, 0], [40, 255, 255]),
         # blue
-        ([100, 0, 0],[150, 255, 255]),
+        ([100, 0, 0], [150, 255, 255]),
         # green
-        ([40, 0, 0],[90, 255, 255]),
+        ([40, 0, 0], [90, 255, 255]),
     ]
     color_index = 0
     for (lower, upper) in boundaries:
@@ -40,22 +40,22 @@ def landmark_detection(image):
         # the mask
         mask = cv2.inRange(hsv, lower, upper)
         output = cv2.bitwise_and(image, image, mask = mask)
-        output[np.where((output==[0,0,0]).all(axis=2))] = [255,255,255]
+        output[np.where((output == [0,0,0]).all(axis=2))] = [255,255,255]
         # output[np.where((output!=[255,255,255]).all(axis=2))] = [0,0,0]
         # blur
-        kernel = np.ones((10,10),np.float32)/100
-        output = cv2.filter2D(output,-1,kernel)
+        kernel = np.ones((10,10), np.float32) / 100
+        output = cv2.filter2D(output, -1, kernel)
         # Setup SimpleBlobDetector parameters.
         params = cv2.SimpleBlobDetector_Params()
         # Filter by Area.
         params.filterByArea = True
         params.minArea = 220
         # Set up the detector with default parameters.
-        detector = cv2.SimpleBlobDetector_create(params)
+        detector = cv2.SimpleBlobDetector(params)
         # Detect blobs.
         keypoints = detector.detect(output)
         # add to corresponding color
-        if len(keypoints)>0:
+        if len(keypoints) > 0:
             for keypoint in keypoints:
                 if color_index == 0:
                     pink.append(keypoint)
@@ -73,7 +73,7 @@ def landmark_detection(image):
         # cv2.imshow("Keypoints", im_with_keypoints)
         # cv2.waitKey(0)
 
-        color_index+=1
+        color_index += 1
 
     # % You also need the following information about the landmark positions: 
     # % cyan:magenta -1500 -1000 magenta:cyan -1500 1000 magenta:green 0 -1000 green:magenta 0 1000 yellow:magenta 1500 -1000 magenta:yellow 1500 1000 
@@ -95,41 +95,42 @@ def landmark_detection(image):
             if abs(p.pt[0]-y.pt[0]) < size/2 and y.size < size+(size/4) and y.size > size-(size/4):
                 if p.pt[1] > y.pt[1]:
                     # pink top, yellow bottom
-                    signatures.append([1,2])
+                    signatures.append([1, 2])
                     signatures.append([6])
                 else:
                     # pink bottom, yellow top
-                    signatures.append([2,1])
+                    signatures.append([2, 1])
                     signatures.append([5])
-                signatures.append(size)
-                signatures.append(p.pt)
+                signatures.append([size])
+                signatures.append([p.pt])
         for b in blue:
             # check if the keypoint is around the same size and if around the same x location
             if abs(p.pt[0]-b.pt[0]) < size/2 and b.size < size+(size/4) and b.size > size-(size/4):
                 if p.pt[1] > b.pt[1]:
                     # pink top, blue bottom
-                    signatures.append([1,3])
+                    signatures.append([1, 3])
                     signatures.append([2])
                 else:
                     # pink bottom, blue top
-                    signatures.append([3,1])
+                    signatures.append([3, 1])
                     signatures.append([1])
-                signatures.append(size)
-                signatures.append(p.pt)
+                signatures.append([size])
+                signatures.append([p.pt])
         for g in green:
             # check if the keypoint is around the same size and if around the same x location
             if abs(p.pt[0]-g.pt[0]) < size/2 and g.size < size+(size/4) and g.size > size-(size/4):
                 if p.pt[1] > g.pt[1]:
                     # pink top, green bottom
-                    signatures.append([1,0])
+                    signatures.append([1, 0])
                     signatures.append([3])
                 else:
                     # pink bottom, green top
-                    signatures.append([0,1])
+                    signatures.append([0, 1])
                     signatures.append([4])
                 signatures.append([size])
-                signatures.append(p.pt)
-    return(signatures)
+                signatures.append([p.pt])
+
+    return signatures
 
 
 
