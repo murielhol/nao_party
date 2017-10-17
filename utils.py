@@ -109,9 +109,8 @@ class LandmarkData:
         """
          return a list of list of dict
          1st list: every element is an image
-         2nd list: every element is a landmark
-         dict: {signature: ID, range: R, bearing: radians}
-         return: [ [ {ID:1, Range:2, Bearing:0.5}, {ID:3, Range:1.5, Bearing:0.2} ], [{ ... }] ]
+         2nd list: every element is a landmark (1st element is the headyaw, subsequent elements are the landmark observed)
+         return: [ [ {head_yaw: 0.31}, {ID:1, Range:2, Bearing:0.5}, {ID:3, Range:1.5, Bearing:0.2} ], [{ ... }] ]
         """
         print 'getting landmark dataset...'
         detected_ind = list()
@@ -126,6 +125,10 @@ class LandmarkData:
                 print landmark_info
 
                 landmarks = list()      # store the landmark information of a SINGLE image
+
+                head_yaw = self.sensor_data[i]['HeadYaw']
+                robot_pos = { 'haed_yaw': head_yaw }
+                landmarks.append(robot_pos)
 
                 lm_width = landmark_info[2]
                 for k, lm in enumerate(lm_width):     # assume the width is stored as a list
@@ -142,6 +145,10 @@ class LandmarkData:
 
                 data.append(landmarks)      # store all the landmarks in ONE image into the list
                 detected_ind.append(i)    # the index of landmarks that can be identified
+            else:
+                head_yaw = self.sensor_data[i]['HeadYaw']
+                robot_pos = { 'haed_yaw': head_yaw }
+                data.append([robot_pos])
 
         with open(outfile, 'w') as f:
             json.dump(data, f)
