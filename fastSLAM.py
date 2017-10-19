@@ -64,9 +64,9 @@ class FastSlamParticle:
 
                 z_t = np.array([measurement[0], measurement[1]])
 
-                # TODO: Need to update self.pos_curr with z_t???
+                # use mean_prev and current particle position to calculate r_hat and theta_hat
+                delta = mean_prev - self.pos_curr[:2]
 
-                delta = mean_prev - self.pos_curr[:1]
                 q = np.dot(delta.T, delta)
 
                 # measurement prediction
