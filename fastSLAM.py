@@ -16,11 +16,17 @@ class FastSlamParticle:
         self.features_prev = list()      # list of tuple? (id, mu, sigma)
         self.features_curr = list()      # list of tuple? (id, mu, sigma)
 
+        # TODO: Not sure if w is for single particle or 1 w for every feature?
+        self.w = 0
+
+    def get_importance_weight(self):
+        return self.w
+
     # reset the observed feature when new one is created
     def _reset_observation(self):
         self.observed_feature = list()
 
-    def _sample_pose(self, action):
+    def sample_pose(self, action):
 
         v = action[0]
         theta = action[1]
@@ -33,7 +39,9 @@ class FastSlamParticle:
 
         self.pos_curr = np.random.multivariate_normal(np.squeeze(mean), self.covR)
 
-    def _update(self, measurements):    # measurement = [(id, dist, bearing), (id, dist, bearing)]
+    def update(self, measurements):    # measurement = [(id, dist, bearing), (id, dist, bearing)]
+
+        _w = list()
 
         for measurement in measurements:
 
@@ -44,13 +52,14 @@ class FastSlamParticle:
                 mean_prev = self.features_prev[id]['mu']
                 sigma_prev = self.features_prev[id]['sigma']
 
-                # TODO: need to define measurement prediction, z_hat
-                z_hat = 0
                 # TODO: Get z_t from the measurement??
-                z_t = 0
+                z_t = np.array([measurement[0], measurement[1]])
 
                 delta = mean_prev - self.pos_curr[:1]
                 q = np.dot(delta.T, delta)
+
+                # measurement prediction
+                z_hat = np.array([np.sqrt(q), np.arctan2(delta[1], delta[0]) - self.pos_curr[2]]).T
 
                 # Jacobian of H with respect to location, STILL HAVE TO MULTIPLE WITH F_BIG
                 H = (1 / q) * np.array([
@@ -78,6 +87,7 @@ class FastSlamParticle:
                      'w': w
                      }
                 self.features_curr.append(f)
+                _w.append(w)        # record the importance weight of every landmark in every measurement?
 
             else:   # for those not observed
 
@@ -106,7 +116,7 @@ class FastSlamParticle:
                 sigma = np.dot(np.dot(H_inv, self.covQ), H_inv.T)
 
                 # default importance weight
-                w = 1
+                w = 1 / len(measurements)
 
                 f = {'mu': mean,
                      'sigma': sigma,
@@ -115,11 +125,30 @@ class FastSlamParticle:
 
                 self.observed_feature.append(id)
                 self.features_curr.append(f)
+                _w.append(w)
 
         for feature in self.features_prev:
             if feature['id'] not in self.observed_feature:  # not sure about this line
                 self.features_curr.append(self.features_prev[feature['id']])
 
-
+        self.pos_prev = self.pos_curr
+        self.w = np.array(_w).mean()            # find the importance weight of this particle
         # reset the self.observed_feature??
 
+
+def resample(w):
+    w = np.array(w)
+    M = w.shape[0]
+    cumsum_w = np.cumsum(w)
+
+    result_ind = np.zeros(shape=[M])
+
+    for m in range(M):
+        ind_m = np.where(cumsum_w > np.random.rand(1))[0]
+        print ind_m
+        if len(ind_m) != 0:
+            result_ind[m] = ind_m[0]
+        else:       # if no satisfied, select an ind randomly
+            result_ind[m] = np.random.randint(0, M)
+
+    return result_ind
