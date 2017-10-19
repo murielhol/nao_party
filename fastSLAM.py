@@ -40,7 +40,6 @@ class FastSlamParticle:
         self.pos_curr = np.random.multivariate_normal(np.squeeze(mean), self.covR)
 
     def update(self, measurements):    # measurement = [(id, dist, bearing), (id, dist, bearing)]
-        print 'updating...'
 
         num_lm = measurements.shape[1]      # number of landmarks
 
@@ -57,7 +56,7 @@ class FastSlamParticle:
             id = i
 
             if id in self.observed_feature:
-                print 'observed feature'
+                # print 'observed feature'
 
                 mean_prev = self.features_prev[str(id)]['mu']
                 sigma_prev = self.features_prev[str(id)]['sigma']
@@ -103,7 +102,7 @@ class FastSlamParticle:
                 _w.append(w)        # record the importance weight of every landmark in every measurement?
 
             else:   # for those not observed
-                print 'not observed feature'
+                # print 'not observed feature'
 
                 rx = self.pos_curr[0]
                 ry = self.pos_curr[1]
@@ -152,7 +151,8 @@ class FastSlamParticle:
         self.pos_prev = self.pos_curr
         self.features_prev = self.features_curr
 
-        self.w = np.array(_w).mean()            # find the importance weight of this particle
+        # find the importance weight of this particle
+        self.w = np.array(_w).mean() if len(_w) > 0 else 0
         # reset the self.observed_feature??
 
 
@@ -165,9 +165,9 @@ def resample(w):
 
     for m in range(M):
         ind_m = np.where(cumsum_w > np.random.rand(1))
-        print ind_m
-        if len(ind_m) != 0:
-            result_ind[m] = ind_m[0]
+
+        if len(ind_m) != 0 and len(ind_m[0]) != 0:
+            result_ind[m] = ind_m[0][0]
         else:       # if no satisfied, select an ind randomly
             result_ind[m] = np.random.randint(0, M)
 

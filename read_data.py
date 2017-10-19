@@ -32,7 +32,3 @@ def read_data():
     # print(x[:, -1])
     # print(z[:, :, -1])
     return u, x, z
-
-
-u, x, z = read_data()
-print z[:, :, 0]
