@@ -34,7 +34,10 @@ time = u.shape[1]
 # initialize a set of particles
 particle_set = [FastSlamParticle() for _ in range(num_particles)]
 
-for t in range(time):
+xpos_global = list()        # store the x position for every time step
+ypos_global = list()
+
+for t in range(10):
     print 'time: {}'.format(t)
 
     # data at the current time step
@@ -44,12 +47,27 @@ for t in range(time):
 
     w = list()
 
+    xpost, ypost = list(), list()       # store coordinate for every particle
+
     for i, particle in enumerate(particle_set):
         particle.sample_pose(u_t)
         particle.update(z_t)
 
         w_ = particle.get_importance_weight()
         w.append(w_)
+
+        xpost.append(particle.pos_curr[0])
+        ypost.append(particle.pos_curr[1])
+
+    if t % 10 == 0:
+        plt.figure()
+        plt.scatter(xpost, ypost)
+        plt.show()
+
+    print np.array(xpost).mean()
+    print np.array(ypost).mean()
+    xpos_global.append(xpost)
+    ypos_global.append(ypost)
 
     resampled_ind = resample(w)
 
