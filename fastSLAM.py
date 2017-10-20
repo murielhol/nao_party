@@ -18,6 +18,7 @@ class FastSlamParticle:
 
         # TODO: Not sure if w is for single particle or 1 w for every feature?
         self.w = 0
+        self.rot1 = 0
 
     def get_importance_weight(self):
         return self.w
@@ -31,15 +32,40 @@ class FastSlamParticle:
         v = action[0]
         theta = action[1]
 
-        mean = self.pos_prev + np.array([
-            [v * np.cos(self.pos_prev[2]) + theta],
-            [v * np.sin(self.pos_prev[2]) + theta],
-            [theta]
-        ]).T
+        # predicted robot position mean
+        x_new = np.array([
+            self.pos_prev[0] + v * np.cos(self.pos_prev[2] + self.rot1),
+            self.pos_prev[1] + v * np.sin(self.pos_prev[2] + self.rot1),
+            self.pos_prev[2] + theta
+        ])
 
-        self.pos_curr = np.random.multivariate_normal(np.squeeze(mean), self.covR)
+        delta = self.pos_prev - x_new
 
-    def update(self, measurements):    # measurement = [(id, dist, bearing), (id, dist, bearing)]
+        self.rot1 = np.arctan2(delta[1], delta[0]) - self.pos_prev[2]
+
+        # jacobian, robot position
+        G = np.array([
+            [1, 0, -v * np.sin(self.pos_prev[2] + self.rot1)],
+            [0, 1, v * np.cos(self.pos_prev[2] + self.rot1)],
+            [0, 0, 1]
+        ])
+
+        # jacobian, control
+        V = np.array([
+            [np.cos(self.pos_prev[2] + self.rot1), - v * np.sin(self.pos_prev[2] + self.rot1)],
+            [np.sin(self.pos_prev[2] + self.rot1), v * np.cos(self.pos_prev[2] + self.rot1)],
+            [0, 1]
+        ])
+
+        # predicted robot position mean
+        self.pos_prev = x_new
+
+        # predicted covariance
+        self.covR = np.dot(np.dot(G, self.covR), G.T) + np.dot(np.dot(V, self.covQ), V.T)
+
+        self.pos_curr = np.random.multivariate_normal(np.squeeze(self.pos_prev), self.covR)
+
+    def update(self, measurements):
 
         num_lm = measurements.shape[1]      # number of landmarks
 
@@ -61,7 +87,7 @@ class FastSlamParticle:
                 mean_prev = self.features_prev[str(id)]['mu']
                 sigma_prev = self.features_prev[str(id)]['sigma']
 
-                z_t = np.array([measurement[0], measurement[1]])
+                z_t = measurement[:2]
 
                 # use mean_prev and current particle position to calculate r_hat and theta_hat
                 delta = mean_prev - self.pos_curr[:2]
@@ -91,7 +117,7 @@ class FastSlamParticle:
                 sigma = np.dot((np.eye(2) - np.dot(K, H)), sigma_prev)
 
                 # importance factor
-                w = multivariate_normal(mean, sigma).pdf(z_t)
+                w = multivariate_normal(z_hat, covQ).pdf(z_t)
 
                 f = {
                      'mu': mean,
