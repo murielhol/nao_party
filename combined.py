@@ -10,7 +10,12 @@ import argparse
 import sys
 import time
 import math
-import getch
+import platform
+if platform.system() == "Windows":
+    from msvcrt import *
+else:
+    import getch
+    getch = getch._Getch()
 from threading import Thread
 from naomanager import NaoManager, DEFAULT_PORT
 from naoqi import ALProxy
@@ -29,16 +34,14 @@ __version__ = "0.1.7"
 
 
 
-getch = getch._Getch()
-
-
 def initialize_camera(videoDevice):
     AL_kTopCamera = 0
     AL_kVGA = 2            # 320x240
     AL_kBGRColorSpace = 13
     AL_kCameraExposureID = 20
-    captureDevice = videoDevice.subscribeCamera("test", AL_kTopCamera, AL_kVGA, AL_kBGRColorSpace, 10) # create image
 
+    captureDevice = videoDevice.subscribeCamera("test3", AL_kTopCamera, AL_kVGA, AL_kBGRColorSpace, 10) # create image
+    print(captureDevice)
     # turn off exposition(0-1)
     expositionID = 11
     videoDevice.setCameraParameter(captureDevice, expositionID, 0)
@@ -62,7 +65,6 @@ def save_data(videoDevice, captureDevice, motionProxy, file_prefix, file_seq):
     # get sensor data
     jointvalues = motionProxy.getAngles("Body", True)
     jointnames = motionProxy.getBodyNames("Body")
-
     if result is None:
         print 'cannot capture.'
     elif result[6] is None:
@@ -76,6 +78,16 @@ def save_data(videoDevice, captureDevice, motionProxy, file_prefix, file_seq):
 
         for jointvalue, jointname in zip(jointvalues, jointnames):
             file.write(jointname + " " + str(jointvalue) + "\n")
+        file.close()
+
+
+        string2 = "./data/" + str(file_prefix) + str(file_seq) + "abs_loc.txt"
+        file = open(string2, "w")
+        robloc = motionProxy.getRobotPosition(False)
+        x_abs = robloc[0]
+        y_abs = robloc[1]
+        theta_abs = robloc[2]
+        file.write(str(x_abs) + ", " +str(y_abs)+ ", " +str(theta_abs)+ ", " + "\n")
         file.close()
 
         # save image
@@ -146,7 +158,7 @@ def main(args):
     x = 0.0
     y = 0.0
     theta = 0.0
-    frequency = 1
+    frequency = 0.5
     CommandFreq = 0.2
     starttime = time.time()
     print("Ready for liftoff at: {}".format(starttime))
@@ -161,10 +173,18 @@ def main(args):
 
     # session = qi.Session()
     # videoDevice = session.service("ALVideoDevice")
-    videoDevice = ALProxy('ALVideoDevice', ip_addr, port_num)# subscribe top camera
-    videoDevice, captureDevice = initialize_camera(videoDevice)
+    try:
+        videoDevice = ALProxy('ALVideoDevice', ip_addr, 9559)# subscribe top camera
+        videoDevice, captureDevice = initialize_camera(videoDevice)
+        motionProxy = ALProxy("ALMotion", ip_addr, 9559)
+        postureProxy = ALProxy("ALRobotPosture", ip_addr, 9559)
+    except Exception,e:
+        raise e
 
-    motionProxy = ALProxy("ALMotion", ip_addr, 9559)
+
+    # Send NAO to Pose Init
+    postureProxy.goToPosture("StandInit", 0.5)
+
 
     # start a new thread to capture images
     ci = CaptureImage()
