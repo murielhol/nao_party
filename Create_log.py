@@ -2,8 +2,8 @@ import numpy as np
 import os
 import cv2
 import json
-from landmark_detection_thomas import landmark_detection
-from utils_thomas import *
+from landmark_detection import landmark_detection
+from utils import *
 import math
 import matplotlib.pyplot as plt
 import pickle
@@ -72,7 +72,7 @@ for i in range(198):
     print(signatures[i])
     landmarks = []
     for landmark in signatures[i][1:]:
-        landmarks.append([len(signatures[i][1:]), top[landmark['id']-1], bottom[landmark['id']-1], landmark['bearing'], (landmark['bearing']+head_Yaw)])
+        landmarks.append([len(signatures[i][1:]), bottom[landmark['id']-1], top[landmark['id']-1], landmark['distance'], (landmark['bearing']+head_Yaw)])
 
     writeline = flatten([location[i],motion[i], landmarks])
     for elem in writeline:
